@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>雙語教案互動填寫系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f3f4f6; }
+        .smooth-scroll { scroll-behavior: smooth; }
+        .indicator-tag { display: inline-flex; align-items: center; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; background-color: #e0e7ff; color: #3730a3; border: 1px solid #a5b4fc; margin-right: 0.5rem; }
+        .required-field { border-left: 4px solid #ef4444; }
+        .field-error { border: 2px solid #ef4444 !important; }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        @media print {
+            body { background-color: white; }
+            #sidebar, .no-print { display: none !important; }
+            #main-content { margin-left: 0 !important; width: 100% !important; padding: 0 !important; }
+            .card { box-shadow: none !important; border: none !important; padding: 0 !important; margin-bottom: 2rem !important; page-break-inside: avoid; }
+            textarea, input { border: none !important; resize: none !important; background: transparent !important; }
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-gray-800 smooth-scroll">
+
+    <!-- 錯誤提示 Modal -->
+    <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+            <h3 class="text-xl font-bold mb-4 text-red-600"><i class="fas fa-exclamation-triangle mr-2"></i>教案檢查結果</h3>
+            <div id="alert-content" class="text-gray-700 mb-6 space-y-2"></div>
+            <div class="flex justify-end">
+                <button onclick="closeAlert()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">了解</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 左側導覽列 -->
+    <aside id="sidebar" class="w-64 bg-white shadow-xl flex flex-col h-full z-10 hidden md:flex flex-shrink-0">
+        <div class="p-6 border-b border-gray-200">
+            <h1 class="text-xl font-bold text-blue-700 leading-tight">雙語教案設計<br><span class="text-sm text-gray-500 font-normal">Bilingual Lesson Plan</span></h1>
+            
+            <div class="mt-4">
+                <div class="flex justify-between text-sm mb-1">
+                    <span class="font-medium">完成進度</span>
+                    <span id="progress-text" class="text-blue-600 font-bold">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto p-4 space-y-1" id="nav-links">
+            <!-- 導覽連結將由 JS 生成 -->
+        </nav>
+
+        <div class="p-4 border-t border-gray-200 space-y-2 bg-gray-50">
+            <button onclick="checkLessonPlan()" class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded shadow transition text-sm"><i class="fas fa-check-double mr-2"></i>檢查教案</button>
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="exportJSON()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-2 rounded transition text-xs"><i class="fas fa-download mr-1"></i>匯出 JSON</button>
+                <label class="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-2 rounded transition text-xs text-center cursor-pointer">
+                    <i class="fas fa-upload mr-1"></i>匯入
+                    <input type="file" id="import-file" accept=".json" class="hidden" onchange="importJSON(event)">
+                </label>
+            </div>
+            <button onclick="exportHTML()" class="w-full bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-medium py-2 px-4 rounded transition text-sm"><i class="fas fa-print mr-2"></i>匯出列印版 (HTML)</button>
+            <div class="flex gap-2">
+                <button onclick="loadExample()" class="flex-1 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-medium py-2 px-2 rounded transition text-xs"><i class="fas fa-magic mr-1"></i>範例</button>
+                <button onclick="clearData()" class="flex-1 bg-red-100 hover:bg-red-200 text-red-700 font-medium py-2 px-2 rounded transition text-xs"><i class="fas fa-trash mr-1"></i>清除</button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 行動版頂部導覽 (簡化) -->
+    <div class="md:hidden fixed top-0 left-0 right-0 bg-white shadow z-20 px-4 py-3 flex justify-between items-center">
+        <h1 class="text-lg font-bold text-blue-700">雙語教案系統</h1>
+        <button onclick="document.getElementById('sidebar').classList.toggle('hidden'); document.getElementById('sidebar').classList.toggle('absolute');" class="text-gray-600 text-xl"><i class="fas fa-bars"></i></button>
+    </div>
+
+    <!-- 右側主要內容區 -->
+    <main id="main-content" class="flex-1 overflow-y-auto bg-gray-100 p-4 md:p-8 pt-16 md:pt-8 scroll-smooth">
+        <div class="max-w-5xl mx-auto" id="form-container">
+            <!-- 內容將由 JS 動態綁定與渲染 -->
+        </div>
+    </main>
+
+    <script>
+        // --- 1. 資料結構定義 ---
+        const initialData = {
+            basicInfo: { school: '', course: '', unit: '', domain: '', material: '', designer: '', grade: '', sessions: '' },
+            rationale: '',
+            competences: { general: '', domain: '', school: '' },
+            learningFocus: { performance: '', contents: '' },
+            readiness: { domain: '', english: '' },
+            objectives: { cognitive: '', skill: '', affective: '' },
+            timing: { teacher: '', students: '' },
+            methods: [],
+            strategies: [],
+            bilingualSkills: [],
+            resources: { materials: '', tools: '', equipment: '', links: '' },
+            assessmentMethods: [],
+            assessmentTools: [],
+            rubrics: [ { aspect: '', a: '', b: '', c: '', score: '' } ],
+            issues: '',
+            sessionsData: [ 
+                { 
+                    id: Date.now(), 
+                    prep: [{ id: Date.now()+1, time: '', tAct: '', sAct: '', eng: '', obj: '' }],
+                    dev: [{ id: Date.now()+2, time: '', tAct: '', sAct: '', eng: '', obj: '' }],
+                    sum: [{ id: Date.now()+3, time: '', tAct: '', sAct: '', eng: '', obj: '' }]
+                } 
+            ],
+            references: '',
+            appendices: ''
+        };
+
+        let appData = JSON.parse(localStorage.getItem('bilingualLessonPlanData')) || JSON.parse(JSON.stringify(initialData));
+
+        // 選項定義
+        const options = {
+            methods: ['講述法', '詰問式教學法', '示範教學法', '討論教學法', '合作學習教學法', '問題導向教學法', '探究式教學法', '角色扮演教學法', '概念獲取法', '概念發展法', '精熟法', '差異化教學', '個別化教學'],
+            strategies: ['搭建鷹架', '搭配獎勵機制', '凸顯學習成效', '連結生活經驗', '給予選擇與自主權', '提供學習典範', '引導學習心向', '展現學習成果', '強化互動合作', '運用多媒體影音', '設計提問', '提供建設性回饋'],
+            bilingualSkills: ['發音清楚', '簡化字彙', '重複 Repeat', '換句話說 Paraphrase', '舉例 Give examples', '比較與對照 Contrast', '使用路標語 Sign-posts', '多模態圖片/影片/實物', '理解檢核 Comprehension Check', '延長候答時間 Wait Time', '避免只問固定學生', '追問確認理解'],
+            assessmentMethods: ['紙筆評量 Pen and Paper', '實作評量 Performance', '真實評量 Authentic', '口語評量 Oral', '觀察評量 Observation', '檔案評量 Portfolio', '同儕評量 Peer', '自我評量 Self-assessment'],
+            assessmentTools: ['考卷', '學習單', '作業簿', '練習本', 'Quiz', '檢核表 Checklists', '評定量表 Rating Scales']
+        };
+
+        const sectionsMap = [
+            { id: 's1', title: '1. 基本資料', indicator: '指標1', req: true },
+            { id: 's2', title: '2. 教學設計理念', indicator: '指標2', req: true },
+            { id: 's3', title: '3. 學科核心素養', indicator: '指標3', req: true },
+            { id: 's4', title: '4. 學科學習重點', indicator: '指標4', req: true },
+            { id: 's5', title: '5. 學生準備度', indicator: '指標5', req: true },
+            { id: 's6', title: '6. 單元學習目標', indicator: '指標6', req: true },
+            { id: 's7', title: '7. 中文/英文使用時機', indicator: '指標7', req: true },
+            { id: 's8', title: '8. 教學方法', indicator: '指標8', req: true },
+            { id: 's9', title: '9. 教學策略', indicator: '指標9', req: true },
+            { id: 's10', title: '10. 雙語教學技巧', indicator: '指標10', req: true },
+            { id: 's11', title: '11. 教學資源', indicator: '指標11', req: true },
+            { id: 's12', title: '12. 評量方法', indicator: '指標12', req: true },
+            { id: 's13', title: '13. 評量工具', indicator: '指標13', req: true },
+            { id: 's14', title: '14. 評量規準', indicator: '指標14', req: true },
+            { id: 's15', title: '15. 議題融入', indicator: '', req: false },
+            { id: 's16', title: '16. 教學流程', indicator: '指標15', req: true },
+            { id: 's17', title: '17. 參考資料', indicator: '指標16', req: false },
+            { id: 's18', title: '18. 附錄', indicator: '指標16', req: false }
+        ];
+
+        // --- 2. 核心渲染功能 ---
+
+        function renderApp() {
+            renderSidebar();
+            renderFormContent();
+            attachEventListeners();
+            updateProgress();
+        }
+
+        function renderSidebar() {
+            const nav = document.getElementById('nav-links');
+            nav.innerHTML = sectionsMap.map(sec => `
+                <a href="#${sec.id}" class="block px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded transition duration-150">
+                    ${sec.title}
+                </a>
+            `).join('');
+        }
+
+        function createInfoBtn(text) {
+            return `<button type="button" class="text-gray-400 hover:text-blue-500 ml-2 focus:outline-none" title="${text}" onclick="alert('${text}')"><i class="fas fa-info-circle"></i></button>`;
+        }
+
+        function renderCheckboxGroup(optionsList, stateKey) {
+            return `<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-2">
+                ${optionsList.map(opt => `
+                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                        <input type="checkbox" class="form-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded" 
+                               value="${opt}" data-state="${stateKey}" ${appData[stateKey].includes(opt) ? 'checked' : ''}>
+                        <span>${opt}</span>
+                    </label>
+                `).join('')}
+            </div>`;
+        }
+
+        function renderFormContent() {
+            const container = document.getElementById('form-container');
+            let html = '';
+
+            // Section 1
+            html += `<section id="s1" class="bg-white shadow rounded-lg p-6 mb-6 card relative required-field">
+                <div class="flex items-center mb-4 border-b pb-2">
+                    <span class="indicator-tag">[指標1]</span><h2 class="text-xl font-bold text-gray-800">1. 基本資料</h2>
+                    ${createInfoBtn('確保教案基本資訊完整，包含學校、課程、對象與節數等。')}
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label class="block text-sm font-medium text-gray-700">學校名稱</label><input type="text" data-model="basicInfo.school" value="${appData.basicInfo.school}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border req-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">課程名稱</label><input type="text" data-model="basicInfo.course" value="${appData.basicInfo.course}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border req-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">單元名稱</label><input type="text" data-model="basicInfo.unit" value="${appData.basicInfo.unit}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border req-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">學科領域</label><input type="text" data-model="basicInfo.domain" value="${appData.basicInfo.domain}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border req-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">教材來源</label><input type="text" data-model="basicInfo.material" value="${appData.basicInfo.material}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">教案設計者</label><input type="text" data-model="basicInfo.designer" value="${appData.basicInfo.designer}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">實施年級</label><input type="text" data-model="basicInfo.grade" value="${appData.basicInfo.grade}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border req-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">共幾節</label><input type="number" data-model="basicInfo.sessions" value="${appData.basicInfo.sessions}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border req-input"></div>
+                </div>
+            </section>`;
+
+            // Section 2
+            html += `<section id="s2" class="bg-white shadow rounded-lg p-6 mb-6 card required-field">
+                <div class="flex items-center mb-4 border-b pb-2">
+                    <span class="indicator-tag">[指標2]</span><h2 class="text-xl font-bold text-gray-800">2. 教學設計理念 Rationale</h2>
+                    ${createInfoBtn('說明：什麼知識/能力對學生重要？為什麼？本單元與此的關聯？')}
+                </div>
+                <textarea data-model="rationale" rows="4" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border req-input" placeholder="請回答：1. 什麼知識或能力對學生重要？ 2. 為什麼重要？ 3. 本單元與這些知識或能力的關係？">${appData.rationale}</textarea>
+            </section>`;
+
+            // Section 3
+            html += `<section id="s3" class="bg-white shadow rounded-lg p-6 mb-6 card required-field">
+                <div class="flex items-center mb-4 border-b pb-2">
+                    <span class="indicator-tag">[指標3]</span><h2 class="text-xl font-bold text-gray-800">3. 學科核心素養對應內容</h2>
+                    ${createInfoBtn('請填 108 課綱代碼與原文，勿修改內容。')}
+                </div>
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium text-gray-700">總綱 General Guidelines</label><textarea data-model="competences.general" rows="2" class="w-full rounded-md border-gray-300 p-2 border mt-1 req-input">${appData.competences.general}</textarea></div>
+                    <div><label class="block text-sm font-medium text-gray-700">領綱 Domain/Subject</label><textarea data-model="competences.domain" rows="2" class="w-full rounded-md border-gray-300 p-2 border mt-1 req-input">${appData.competences.domain}</textarea></div>
+                    <div><label class="block text-sm font-medium text-gray-700">校本素養 (若無可免填)</label><textarea data-model="competences.school" rows="2" class="w-full rounded-md border-gray-300 p-2 border mt-1">${appData.competences.school}</textarea></div>
+                </div>
+            </section>`;
+
+            // Section 4
+            html += `<section id="s4" class="bg-white shadow rounded-lg p-6 mb-6 card required-field">
+                <div class="flex items-center mb-4 border-b pb-2">
+                    <span class="indicator-tag">[指標4]</span><h2 class="text-xl font-bold text-gray-800">4. 學科學習重點</h2>
+                    ${createInfoBtn('只填學科重點，不放英文內容。建議各填最重要 2–3 項。')}
+                </div>
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium text-gray-700">學習表現 Learning Performance</label><textarea data-model="learningFocus.performance" rows="3" class="w-full rounded-md border-gray-300 p-2 border mt-1 req-input">${appData.learningFocus.performance}</textarea></div>
+                    <div><label class="block text-sm font-medium text-gray-700">學習內容 Learning Contents</label><textarea data-model="learningFocus.contents" rows="3" class="w-full rounded-md border-gray-300 p-2 border mt-1 req-input">${appData.learningFocus.contents}</textarea></div>
+                </div>
+            </section>`;
+
+            // Section 5
+            html += `<section id="s5" class="bg-white shadow rounded-lg p-6 mb-6 card required-field">
+                <div class="flex items-center mb-4 border-b pb-2">
+                    <span class="indicator-tag">[指標5]</span><h2 class="text-xl font-bold text-gray-800">5. 學生準備度 Students’ Readiness</h2>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 flex items-center">學科準備度 ${createInfoBtn('學生已知道/會做什麼？具備哪些技能？需要哪些先備知能？')}</label>
+                        <textarea data-model="readiness.domain" rows="3" class="w-full rounded-md border-gray-300 p-2 border mt-1 req-input">${appData.readiness.domain}</textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">英語準備度 (點擊按鈕加入句型)</label>
+                        <div class="flex flex-wrap gap-2 mb-2">
+                            ${['Ss know', 'Ss can do', 'Ss understand', 'Ss know how to', 'Ss have learned', 'Ss have the ability of', 'Ss have experience of'].map(p => 
+                                `<button type="button" onclick="insertText('readiness_eng', '${p} ')" class="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 rounded px-2 py-1">${p}...</button>`
+                            ).join('')}
+                        </div>
+                        <textarea id="readiness_eng" data-model="readiness.english" rows="3" class="w-full rounded-md border-gray-300 p-2 border mt-1 req-input">${appData.readiness.english}</textarea>
+                    </div>
+                </div>
+            </section>`;
+
+            // Section 6
+            html += `<section id="s6" class="bg-white shadow rounded-lg p-6 mb-6 card required-field">
+                <div class="flex items-center mb-4 border-b pb-2">
+                    <span class="indicator-tag">[指標6]</span><h2 class="text-xl font-bold text-gray-800">6. 單元學習目標</h2>
+                    ${createInfoBtn('寫結果不寫過程；一個目標一項行為；不要列入英文文法/單字目標。')}
+                </div>
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium text-gray-700">認知 Cognitive</label><textarea data-model="objectives.cognitive" rows="2" class="w-full rounded-md border-gray-300 p-2 border mt-1 req-input">${appData.objectives.cognitive}</textarea></div>
+                    <div><label class="block text-sm font-medium text-gray-700">技能 Skill</label><textarea data-model="objectives.skill" rows="2" class="w-full rounded-md border-gray-300 p-2 border mt-1">${appData.objectives.skill}</textarea></div>
+                    <div><label class="block text-sm font-medium text-gray-700">情意／態度 Affective</label><textarea data-model="objectives.affective" rows="2" class="w-full rounded-md border-gray-300 p-2 border mt-1">${appData.objectives.affective}</textarea></div>
+                </div>
+            </section>`;
+
+            // Section 7
+            html += `<section id="s7" class="bg-white shadow rounded-lg p-6 mb-6 card required-field">
+                <div class="flex items-center mb-4 border-b pb-2">
+                    <span class="indicator-tag">[指標7]</span><h2 class="text-xl font-bold text-gray-800">7. 中/英文使用時機</h2>
+                    ${createInfoBtn('主要授課為中文，此處填英文使用時機，例如聽說讀寫的機會。')}
+                </div>
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium text-gray-700">教師 Teacher</label><textarea data-model="timing.teacher" rows="2" class="w-full rounded-md border-gray-300 p-2 border mt-1 req-input">${appData.timing.teacher}</textarea></div>
+                    <div><label class="block text-sm font-medium text-gray-700">學生 Students</label><textarea data-model="timing.students" rows="2" class="w-full rounded-md border-gray-300 p-2 border mt-1 req-input">${appData.timing.students}</textarea></div>
+                </div>
+            </section>`;
+
+            // Sections 8, 9, 10, 12, 13 (Checkboxes)
+            const renderCheckboxSection = (id, num, title, ind, dataKey, opts, helpText) => `
+                <section id="${id}" class="bg-white shadow rounded-lg p-6 mb-6 card required-field">
+                    <div class="flex items-center mb-4 border-b pb-2">
+                        <span class="indicator-tag">[${ind}]</span><h2 class="text-xl font-bold text-gray-800">${num}. ${title}</h2>
+                        ${createInfoBtn(helpText)}
+                    </div>
+                    ${renderCheckboxGroup(opts, dataKey)}
+                </section>`;
+
+            html += renderCheckboxSection('s8', 8, '教學方法', '指標8', 'methods', options.methods, '教師教導學習重點的方式，不是誘發動機。');
+            html += renderCheckboxSection('s9', 9, '教學策略', '指標9', 'strategies', options.strategies, '需能誘發學生動機，並連結活動與準備度。');
+            html += renderCheckboxSection('s10', 10, '雙語教學技巧', '指標10', 'bilingualSkills', options.bilingualSkills, '支持學生理解學科內容的技巧。');
+            
+            // Section 11
+            html += `<section id="s11" class="bg-white shadow rounded-lg p-6 mb-6 card required-field">
+                <div class="flex items-center mb-4 border-b pb-2">
+                    <span class="indicator-tag">[指標11]</span><h2 class="text-xl font-bold text-gray-800">11. 教學資源及輔助器材</h2>
+                    ${createInfoBtn('名稱要清楚具體；影片/學習單放附錄，PPT可不附。')}
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label class="block text-sm font-medium text-gray-700">教材 Materials</label><textarea data-model="resources.materials" rows="2" class="w-full rounded-md border-gray-300 p-2 border mt-1">${appData.resources.materials}</textarea></div>
+                    <div><label class="block text-sm font-medium text-gray-700">工具 Tools</label><textarea data-model="resources.tools" rows="2" class="w-full rounded-md border-gray-300 p-2 border mt-1">${appData.resources.tools}</textarea></div>
+                    <div><label class="block text-sm font-medium text-gray-700">設備 Equipment</label><textarea data-model="resources.equipment" rows="2" class="w-full rounded-md border-gray-300 p-2 border mt-1">${appData.resources.equipment}</textarea></div>
+                    <div><label class="block text-sm font-medium text-gray-700">影片或網站連結</label><textarea data-model="resources.links" rows="2" class="w-full rounded-md border-gray-300 p-2 border mt-1">${appData.resources.links}</textarea></div>
+                </div>
+            </section>`;
+
+            html += renderCheckboxSection('s12', 12, '評量方法', '指標12', 'assessmentMethods', options.assessmentMethods, '評量方法要能判斷是否達成學習目標。');
+            html += renderCheckboxSection('s13', 13, '評量工具', '指標13', 'assessmentTools', options.assessmentTools, '檢核表只有是/否，不是評分規準。');
+
+            // Section 14 (Rubrics)
+            html += `<section id="s14" class="bg-white shadow rounded-lg p-6 mb-6 card required-field">
+                <div class="flex items-center justify-between mb-4 border-b pb-2">
+                    <div class="flex items-center">
+                        <span class="indicator-tag">[指標14]</span><h2 class="text-xl font-bold text-gray-800">14. 評量規準 Rubrics</h2>
+                        ${createInfoBtn('列出重要表現面向、操作性定義、級別界定與描述語。')}
+                    </div>
+                    <button type="button" onclick="addRubricRow()" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm no-print"><i class="fas fa-plus mr-1"></i>新增列</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 border">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">評量面向</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">A 描述</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">B 描述</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">C 描述</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">分數/等第</th>
+                                <th class="px-2 py-2 no-print"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="rubrics-tbody" class="bg-white divide-y divide-gray-200">
+                            <!-- Rendered via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>`;
+
+            // Section 15
+            html += `<section id="s15" class="bg-white shadow rounded-lg p-6 mb-6 card">
+                <div class="flex items-center mb-4 border-b pb-2">
+                    <h2 class="text-xl font-bold text-gray-800">15. 議題融入 Issues Integrated</h2>
+                    <span class="text-sm text-gray-500 ml-2">(若無可免填)</span>
+                </div>
+                <textarea data-model="issues" rows="2" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">${appData.issues}</textarea>
+            </section>`;
+
+            // Section 16 (Procedures) - Container
+            html += `<section id="s16" class="bg-white shadow rounded-lg p-6 mb-6 card required-field">
+                <div class="flex items-center justify-between mb-4 border-b pb-2">
+                    <div class="flex items-center">
+                        <span class="indicator-tag">[指標15]</span><h2 class="text-xl font-bold text-gray-800">16. 教學流程</h2>
+                        ${createInfoBtn('不要寫逐字稿，具體並用編號條列。')}
+                    </div>
+                    <button type="button" onclick="addSession()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-sm no-print shadow"><i class="fas fa-plus mr-1"></i>新增節次</button>
+                </div>
+                <div id="sessions-container" class="space-y-8">
+                    <!-- Rendered via JS -->
+                </div>
+            </section>`;
+
+            // Section 17, 18
+            html += `<section id="s17" class="bg-white shadow rounded-lg p-6 mb-6 card">
+                <div class="flex items-center mb-4 border-b pb-2">
+                    <span class="indicator-tag">[指標16]</span><h2 class="text-xl font-bold text-gray-800">17. 參考資料 References</h2>
+                </div>
+                <textarea data-model="references" rows="3" class="w-full rounded-md border-gray-300 p-2 border">${appData.references}</textarea>
+            </section>`;
+            
+            html += `<section id="s18" class="bg-white shadow rounded-lg p-6 mb-6 card">
+                <div class="flex items-center mb-4 border-b pb-2">
+                    <span class="indicator-tag">[指標16]</span><h2 class="text-xl font-bold text-gray-800">18. 附錄 Appendices</h2>
+                </div>
+                <textarea data-model="appendices" rows="3" class="w-full rounded-md border-gray-300 p-2 border">${appData.appendices}</textarea>
+            </section>`;
+
+            container.innerHTML = html;
+
+            // Render dynamic parts
+            renderRubrics();
+            renderSessions();
+        }
+
+        // --- 3. 動態渲染邏輯 (規準與流程) ---
+
+        function renderRubrics() {
+            const tbody = document.getElementById('rubrics-tbody');
+            if(!tbody) return;
+            tbody.innerHTML = appData.rubrics.map((r, index) => `
+                <tr>
+                    <td class="p-1"><textarea class="w-full text-sm border-gray-300 border p-1 rounded" onchange="updateRubric(${index}, 'aspect', this.value)">${r.aspect}</textarea></td>
+                    <td class="p-1"><textarea class="w-full text-sm border-gray-300 border p-1 rounded" onchange="updateRubric(${index}, 'a', this.value)">${r.a}</textarea></td>
+                    <td class="p-1"><textarea class="w-full text-sm border-gray-300 border p-1 rounded" onchange="updateRubric(${index}, 'b', this.value)">${r.b}</textarea></td>
+                    <td class="p-1"><textarea class="w-full text-sm border-gray-300 border p-1 rounded" onchange="updateRubric(${index}, 'c', this.value)">${r.c}</textarea></td>
+                    <td class="p-1"><input type="text" class="w-full text-sm border-gray-300 border p-1 rounded" onchange="updateRubric(${index}, 'score', this.value)" value="${r.score}"></td>
+                    <td class="p-1 text-center no-print">
+                        <button onclick="removeRubricRow(${index})" class="text-red-500 hover:text-red-700" title="刪除"><i class="fas fa-trash-alt"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderSessions() {
+            const container = document.getElementById('sessions-container');
+            if(!container) return;
+            container.innerHTML = appData.sessionsData.map((session, sIndex) => `
+                <div class="border rounded-lg border-indigo-200 bg-indigo-50/30 overflow-hidden relative">
+                    <div class="bg-indigo-100 px-4 py-3 flex justify-between items-center border-b border-indigo-200">
+                        <h3 class="font-bold text-indigo-800 text-lg">第 ${sIndex + 1} 節</h3>
+                        <button onclick="removeSession(${sIndex})" class="text-red-500 hover:text-red-700 no-print text-sm"><i class="fas fa-times mr-1"></i>刪除此節</button>
+                    </div>
+                    <div class="p-4 space-y-6">
+                        ${renderStage(sIndex, 'prep', '準備階段 Preparation Stage', session.prep)}
+                        ${renderStage(sIndex, 'dev', '發展階段 Development Stage', session.dev)}
+                        ${renderStage(sIndex, 'sum', '總結階段 Summary Stage', session.sum)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderStage(sIndex, stageKey, title, activities) {
+            return `
+            <div class="bg-white p-4 rounded shadow-sm border border-gray-200">
+                <div class="flex justify-between items-center mb-3">
+                    <h4 class="font-bold text-gray-700 border-l-4 border-blue-500 pl-2">${title}</h4>
+                    <button onclick="addActivity(${sIndex}, '${stageKey}')" class="text-blue-600 hover:bg-blue-50 px-2 py-1 rounded text-sm no-print border border-blue-200"><i class="fas fa-plus text-xs"></i> 新增活動</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 border-b">
+                                <th class="p-2 text-left w-20">時間</th>
+                                <th class="p-2 text-left">教師活動</th>
+                                <th class="p-2 text-left">學生活動</th>
+                                <th class="p-2 text-left w-1/5">英文時機</th>
+                                <th class="p-2 text-left w-32">對應目標</th>
+                                <th class="p-2 no-print w-10"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${activities.map((act, aIndex) => `
+                                <tr class="border-b border-gray-100 hover:bg-gray-50 align-top">
+                                    <td class="p-1"><input type="text" class="w-full border rounded p-1 text-xs req-act" placeholder="10 min" value="${act.time}" onchange="updateActivity(${sIndex}, '${stageKey}', ${aIndex}, 'time', this.value)"></td>
+                                    <td class="p-1"><textarea rows="2" class="w-full border rounded p-1 text-xs req-act" onchange="updateActivity(${sIndex}, '${stageKey}', ${aIndex}, 'tAct', this.value)">${act.tAct}</textarea></td>
+                                    <td class="p-1"><textarea rows="2" class="w-full border rounded p-1 text-xs" onchange="updateActivity(${sIndex}, '${stageKey}', ${aIndex}, 'sAct', this.value)">${act.sAct}</textarea></td>
+                                    <td class="p-1"><textarea rows="2" class="w-full border rounded p-1 text-xs" placeholder="聽/說/讀/寫" onchange="updateActivity(${sIndex}, '${stageKey}', ${aIndex}, 'eng', this.value)">${act.eng}</textarea></td>
+                                    <td class="p-1"><input type="text" class="w-full border rounded p-1 text-xs" placeholder="標號" value="${act.obj}" onchange="updateActivity(${sIndex}, '${stageKey}', ${aIndex}, 'obj', this.value)"></td>
+                                    <td class="p-1 text-center no-print align-middle">
+                                        <button onclick="removeActivity(${sIndex}, '${stageKey}', ${aIndex})" class="text-gray-400 hover:text-red-500"><i class="fas fa-minus-circle"></i></button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+        }
+
+        // --- 4. 狀態更新與事件綁定 ---
+
+        function updateRubric(index, field, value) { appData.rubrics[index][field] = value; saveState(); }
+        function addRubricRow() { appData.rubrics.push({ aspect: '', a: '', b: '', c: '', score: '' }); saveState(); renderRubrics(); }
+        function removeRubricRow(index) { appData.rubrics.splice(index, 1); saveState(); renderRubrics(); }
+
+        function updateActivity(sIndex, stage, aIndex, field, value) { appData.sessionsData[sIndex][stage][aIndex][field] = value; saveState(); }
+        function addActivity(sIndex, stage) { appData.sessionsData[sIndex][stage].push({ id: Date.now(), time: '', tAct: '', sAct: '', eng: '', obj: '' }); saveState(); renderSessions(); }
+        function removeActivity(sIndex, stage, aIndex) { appData.sessionsData[sIndex][stage].splice(aIndex, 1); saveState(); renderSessions(); }
+        
+        function addSession() {
+            appData.sessionsData.push({
+                id: Date.now(),
+                prep: [{ id: Date.now()+1, time: '', tAct: '', sAct: '', eng: '', obj: '' }],
+                dev: [{ id: Date.now()+2, time: '', tAct: '', sAct: '', eng: '', obj: '' }],
+                sum: [{ id: Date.now()+3, time: '', tAct: '', sAct: '', eng: '', obj: '' }]
+            });
+            saveState(); renderSessions();
+        }
+        function removeSession(index) { if(confirm('確定刪除此節？')) { appData.sessionsData.splice(index, 1); saveState(); renderSessions(); } }
+
+        function insertText(id, text) {
+            const el = document.getElementById(id);
+            if(el) { el.value += text; triggerEvent(el, 'input'); }
+        }
+
+        function triggerEvent(el, type) {
+            if ('createEvent' in document) {
+                var e = document.createEvent('HTMLEvents');
+                e.initEvent(type, false, true);
+                el.dispatchEvent(e);
+            } else {
+                el.fireEvent('on' + type);
+            }
+        }
+
+        function attachEventListeners() {
+            // Text inputs & textareas
+            document.querySelectorAll('[data-model]').forEach(el => {
+                el.addEventListener('input', (e) => {
+                    const keys = e.target.getAttribute('data-model').split('.');
+                    if(keys.length === 1) appData[keys[0]] = e.target.value;
+                    else if(keys.length === 2) appData[keys[0]][keys[1]] = e.target.value;
+                    saveState();
+                    updateProgress();
+                    
+                    if(e.target.classList.contains('field-error') && e.target.value.trim() !== '') {
+                        e.target.classList.remove('field-error');
+                    }
+                });
+            });
+
+            // Checkboxes
+            document.querySelectorAll('input[type="checkbox"][data-state]').forEach(el => {
+                el.addEventListener('change', (e) => {
+                    const key = e.target.getAttribute('data-state');
+                    if(e.target.checked) {
+                        if(!appData[key].includes(e.target.value)) appData[key].push(e.target.value);
+                    } else {
+                        appData[key] = appData[key].filter(v => v !== e.target.value);
+                    }
+                    saveState();
+                    updateProgress();
+                });
+            });
+        }
+
+        function saveState() {
+            localStorage.setItem('bilingualLessonPlanData', JSON.stringify(appData));
+            updateProgress();
+        }
+
+        function updateProgress() {
+            // Simple heuristic for progress: check main sections
+            const checks = [
+                appData.basicInfo.course, appData.basicInfo.unit, appData.basicInfo.grade,
+                appData.rationale, appData.competences.domain, appData.learningFocus.performance,
+                appData.readiness.domain, appData.objectives.cognitive, appData.timing.teacher,
+                appData.methods.length > 0, appData.strategies.length > 0, appData.bilingualSkills.length > 0,
+                appData.assessmentMethods.length > 0, appData.rubrics[0].aspect,
+                appData.sessionsData[0].prep[0].tAct
+            ];
+            
+            const filled = checks.filter(c => typeof c === 'string' ? c.trim() !== '' : c === true).length;
+            const percent = Math.round((filled / checks.length) * 100);
+            
+            document.getElementById('progress-bar').style.width = `${percent}%`;
+            document.getElementById('progress-text').innerText = `${percent}%`;
+        }
+
+        // --- 5. 工具功能 ---
+
+        function exportJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `雙語教案_${appData.basicInfo.unit || '未命名'}.json`);
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function importJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if(imported && imported.basicInfo) {
+                        appData = imported;
+                        saveState();
+                        renderApp();
+                        alert('匯入成功！');
+                    } else {
+                        alert('檔案格式錯誤');
+                    }
+                } catch(err) {
+                    alert('讀取失敗：' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; // Reset
+        }
+
+        function exportHTML() {
+            window.print();
+        }
+
+        function clearData() {
+            if(confirm('確定要清除所有填寫的資料嗎？此動作無法復原。')) {
+                appData = JSON.parse(JSON.stringify(initialData));
+                saveState();
+                renderApp();
+            }
+        }
+
+        function loadExample() {
+            if(confirm('即將載入範例資料，這將會覆蓋您目前的填寫內容，確定嗎？')) {
+                appData.basicInfo = { school: '幸福國小', course: '自然科學', unit: '神奇的磁力', domain: '自然科學', material: '康軒版', designer: '王大明', grade: '三年級', sessions: '3' };
+                appData.rationale = '磁力是日常生活中常見的物理現象，了解磁鐵的特性有助於學生理解生活中的工具原理。本單元透過動手實驗，培養科學探究精神，並以雙語模式增加相關學科英語接觸。';
+                appData.competences.general = '自-E-A1 具備喜歡自然與探索科學的態度及熱忱...';
+                appData.competences.domain = 'pe-II-2 能正確安全操作適合學習階段的物品...';
+                appData.learningFocus.performance = '1. 能透過操作歸納磁鐵相吸、相斥的規律。\n2. 能用觀察紀錄表紀錄實驗結果。';
+                appData.learningFocus.contents = 'INd-II-5 磁鐵具有磁性，可吸附鐵製品。\nINd-II-6 磁鐵同極相斥、異極相吸。';
+                appData.readiness.domain = '學生已知道磁鐵可以吸在冰箱上，但在本學科尚未系統性學過磁極的概念。';
+                appData.readiness.english = 'Ss know colors (red, blue).\nSs understand simple commands (look, touch).';
+                appData.objectives.cognitive = '1. 學生能說出磁鐵有N極和S極。';
+                appData.objectives.skill = '1. 學生能操作磁鐵測試相吸與相斥。';
+                appData.timing.teacher = 'Teacher gives simple instructions in English (e.g., "Put the magnets together").';
+                appData.timing.students = 'Students report results using simple sentence: "They attract" or "They repel".';
+                appData.methods = ['示範教學法', '探究式教學法'];
+                appData.strategies = ['搭建鷹架', '強化互動合作'];
+                appData.bilingualSkills = ['多模態圖片/影片/實物', '簡化字彙'];
+                appData.resources = { materials: '磁鐵組', tools: '', equipment: '實物投影機', links: '' };
+                appData.assessmentMethods = ['觀察評量 Observation', '實作評量 Performance'];
+                appData.assessmentTools = ['學習單'];
+                appData.rubrics = [{ aspect: '操作實驗', a: '能正確操作並說出結果', b: '能在提示下操作', c: '無法操作', score: '' }];
+                appData.sessionsData[0].dev[0] = { id: 1, time: '15m', tAct: '發放磁鐵，示範同極靠近。', sAct: '兩人一組操作磁鐵。', eng: 'Repel, Attract', obj: '技能1' };
+                saveState();
+                renderApp();
+            }
+        }
+
+        // --- 6. 教案檢查邏輯 ---
+
+        function checkLessonPlan() {
+            let errors = [];
+            
+            // 1. 必填欄位檢查
+            document.querySelectorAll('.req-input').forEach(el => el.classList.remove('field-error'));
+            let hasEmptyReq = false;
+            document.querySelectorAll('.req-input').forEach(el => {
+                if(!el.value.trim()) {
+                    el.classList.add('field-error');
+                    hasEmptyReq = true;
+                }
+            });
+            if(hasEmptyReq) errors.push('有<span class="text-red-600 font-bold">必填欄位</span>尚未填寫（已用紅框標示）。');
+
+            // 2. 學習目標是否有動詞名詞 (簡單啟發式檢查長度)
+            if(appData.objectives.cognitive.length < 5) errors.push('「單元學習目標」內容過短，請確認是否包含具體的<span class="font-bold">動詞與名詞</span>。');
+
+            // 3. 評量方法是否對應 (有目標但沒勾評量)
+            if((appData.objectives.cognitive || appData.objectives.skill) && appData.assessmentMethods.length === 0) {
+                errors.push('已填寫學習目標，但未勾選相對應的<span class="font-bold">「評量方法」</span>。');
+            }
+
+            // 4. 教學流程是否填時間
+            let missingTime = false;
+            appData.sessionsData.forEach(s => {
+                ['prep', 'dev', 'sum'].forEach(stage => {
+                    s[stage].forEach(act => {
+                        if(act.tAct && !act.time) missingTime = true;
+                    });
+                });
+            });
+            if(missingTime) errors.push('「教學流程」中有活動<span class="font-bold">未填寫時間</span>。');
+
+            // 5. 學習表現/內容 2-3 項
+            const perfCount = appData.learningFocus.performance.split('\n').filter(l => l.trim()).length;
+            const contCount = appData.learningFocus.contents.split('\n').filter(l => l.trim()).length;
+            if(perfCount > 4 || contCount > 4 || (appData.learningFocus.performance && perfCount < 2)) {
+                errors.push(`「學科學習重點」建議填寫 <span class="font-bold">最重要 2-3 項</span>。目前學習表現 ${perfCount} 項，學習內容 ${contCount} 項。`);
+            }
+
+            // 顯示結果
+            const alertContent = document.getElementById('alert-content');
+            if(errors.length === 0) {
+                alertContent.innerHTML = '<p class="text-green-600 font-bold"><i class="fas fa-check-circle mr-2"></i>太棒了！基本檢查皆通過，資料填寫完整。</p>';
+            } else {
+                alertContent.innerHTML = '<ul class="list-disc pl-5">' + errors.map(e => `<li>${e}</li>`).join('') + '</ul>';
+            }
+            document.getElementById('alert-modal').classList.remove('hidden');
+        }
+
+        function closeAlert() {
+            document.getElementById('alert-modal').classList.add('hidden');
+        }
+
+        // --- 初始化 ---
+        window.onload = () => {
+            renderApp();
+        };
+
+    </script>
+</body>
+</html>
